@@ -25,7 +25,7 @@ function [parameters] = FitCircles(parameters)
     if isfield(parameters, 'skip')
         
         % Remove those frames
-        DLC_data = DLC_data(parameters.skip + 1 :end, :);
+        DLC_data = DLC_data(parameters.skip/parameters.channelNumber + 1 :end, :);
 
     end 
 

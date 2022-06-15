@@ -97,6 +97,11 @@ function [parameters] = FitCircles(parameters)
 
     % Calculate diameter, min diameter, max diameter
     diameter = circData(:, 3) * 2;
+
+    % Remove outliers from the calculated diameters. 
+    diameter(isoutlier(diameter)) = NaN;
+
+    % Calculate min & max diameters.
     parameters.circle_info.max_diameter = max(diameter);
     parameters.circle_info.min_diameter = min(diameter);
 

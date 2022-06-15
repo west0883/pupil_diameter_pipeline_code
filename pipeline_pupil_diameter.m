@@ -32,10 +32,11 @@ parameters.mice_all = mice_all;
 % Ex cont: stackList=ListStacks(numberVector,digitNumber); 
 % Ex cont: mice_all(1).stacks(1)=stackList;
 
-parameters.mice_all = parameters.mice_all(2:3);       %[1:6, 8]);
-parameters.mice_all(1).days = parameters.mice_all(1).days(10); 
-parameters.mice_all(1).days(1).stacks = [];
+parameters.mice_all = parameters.mice_all(1:3);       %[1:6, 8]);
+parameters.mice_all(1).days = parameters.mice_all(1).days([10 12]); 
+parameters.mice_all(1).days(2).spontaneous = parameters.mice_all(1).days(2).spontaneous(1:end-1);
 parameters.mice_all(2).days = parameters.mice_all(2).days(9:10); 
+parameters.mice_all(3).days = parameters.mice_all(3).days(9:10); 
 
 % Give the number of digits that should be included in each stack number.
 parameters.digitNumber=2; 
@@ -61,6 +62,18 @@ parameters.frames=6000;
 % stabilization of camera. Need this to know how much to skip in the
 % behavior.
 parameters.skip = 1200; 
+
+% Load names of motorized periods
+load([parameters.dir_exper 'periods_nametable.mat']);
+periods_motorized = periods;
+
+% Load names of spontaneous periods
+load([parameters.dir_exper 'periods_nametable_spontaneous.mat']);
+periods_spontaneous = periods(1:6, :);
+clear periods; 
+
+% Create a shared motorized & spontaneous list.
+periods_bothConditions = [periods_motorized; periods_spontaneous]; 
 
 % Loop variables.
 parameters.loop_variables.data_type = {'correlations', 'PCA scores individual mouse'};
@@ -144,4 +157,322 @@ parameters.loop_list.things_to_save.circle_info.level = 'stack';
 
 RunAnalysis({@FitCircles}, parameters);
 
-%% Normalize pupil diameters within stacks somehow (by % max per stack? Preferably by max by day)
+%% Find max pupil diameter per day
+% Concatenate the max pupil diameters of each stack in a day, then take
+% maximum. (Max is taken after each concatenation, but only the last is
+% saved.)
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterators   
+% Both motorized & spontaneous stacks are concatenated together.
+parameters.loop_list.iterators = {
+               'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+               'stack', {'[loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').stacks; loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').spontaneous]'}, 'stack_iterator';
+                 };
+
+parameters.concatDim = 1;
+parameters.concatenation_level = 'stack';
+parameters.evaluation_instructions = {{};
+                                      {'data_evaluated = max(parameters.data);'}};
+
+% Input
+parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\pupil diameters\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_load.data.filename = {'trial', 'stack', '.mat'};
+parameters.loop_list.things_to_load.data.variable = {'trial.max_diameter'}; 
+parameters.loop_list.things_to_load.data.level = 'stack';
+
+% Outputs
+parameters.loop_list.things_to_save.data_evaluated.dir = {[parameters.dir_exper 'behavior\eye\pupil diameters\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_save.data_evaluated.filename = {'day_max_diameter.mat'};
+parameters.loop_list.things_to_save.data_evaluated.variable = {'max_diameter'}; 
+parameters.loop_list.things_to_save.data_evaluated.level = 'day';
+
+parameters.loop_list.things_to_rename = {{'concatenated_data', 'data'}};
+
+RunAnalysis({@ConcatenateData, @EvaluateOnData}, parameters);
+
+parameters = rmfield(parameters, 'concatenation_level');
+
+%% Normalize pupil diameters by proportion of max per day
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterators   
+% Both motorized & spontaneous stacks are concatenated together.
+parameters.loop_list.iterators = {
+               'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+               'stack', {'[loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').stacks; loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').spontaneous]'}, 'stack_iterator';
+                 };
+
+parameters.evaluation_instructions = {{'data_evaluated = parameters.data./parameters.max_diameter;'}};
+
+% Inputs
+% max diameter per day
+parameters.loop_list.things_to_load.max_diameter.dir = {[parameters.dir_exper 'behavior\eye\pupil diameters\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_load.max_diameter.filename = {'day_max_diameter.mat'};
+parameters.loop_list.things_to_load.max_diameter.variable = {'max_diameter'}; 
+parameters.loop_list.things_to_load.max_diameter.level = 'day';
+% timeseries of pupil diameters
+parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\pupil diameters\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_load.data.filename= {'trial', 'stack', '.mat'};
+parameters.loop_list.things_to_load.data.variable= {'trial.diameter'}; 
+parameters.loop_list.things_to_load.data.level = 'stack';
+
+% Ouputs
+parameters.loop_list.things_to_save.data_evaluated.dir = {[parameters.dir_exper 'behavior\eye\pupil diameters normalized\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_save.data_evaluated.filename = {'diameters', 'stack', '.mat'};
+parameters.loop_list.things_to_save.data_evaluated.variable = {'diameters'}; 
+parameters.loop_list.things_to_save.data_evaluated.level = 'stack';
+
+RunAnalysis({@EvaluateOnData}, parameters);
+
+%% Motirized: Segment by behavior
+
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterators
+parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+                   'stack', {'loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').stacks'}, 'stack_iterator'};
+parameters.loop_variables.periods_nametable = periods_motorized; 
+
+% Skip any files that don't exist (spontaneous or problem files)
+parameters.load_abort_flag = true; 
+
+% Dimension of different time range pairs.
+parameters.rangePairs = 1; 
+
+% 
+parameters.segmentDim = 1;
+parameters.concatDim = 2;
+
+% Input values. 
+% Extracted timeseries.
+parameters.loop_list.things_to_load.timeseries.dir = {[parameters.dir_exper 'behavior\eye\pupil diameters normalized\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_load.timeseries.filename= {'diameters', 'stack', '.mat'};
+parameters.loop_list.things_to_load.timeseries.variable= {'diameters'}; 
+parameters.loop_list.things_to_load.timeseries.level = 'stack';
+% Time ranges
+parameters.loop_list.things_to_load.time_ranges.dir = {[parameters.dir_exper 'behavior\motorized\period instances table format\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_load.time_ranges.filename= {'all_periods_', 'stack', '.mat'};
+parameters.loop_list.things_to_load.time_ranges.variable= {'all_periods.time_ranges'}; 
+parameters.loop_list.things_to_load.time_ranges.level = 'stack';
+
+% Output Values
+parameters.loop_list.things_to_save.segmented_timeseries.dir = {[parameters.dir_exper 'behavior\eye\segmented eye pupil diameters\motorized\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_save.segmented_timeseries.filename= {'segmented_timeseries_', 'stack', '.mat'};
+parameters.loop_list.things_to_save.segmented_timeseries.variable= {'segmented_timeseries'}; 
+parameters.loop_list.things_to_save.segmented_timeseries.level = 'stack';
+
+RunAnalysis({@SegmentTimeseriesData}, parameters);
+
+%% Spontaneous: Segment by behavior
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterators
+parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+                   'stack', {'loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').spontaneous'}, 'stack_iterator';
+                   'period', {'loop_variables.periods_spontaneous{:}'}, 'period_iterator'};
+
+parameters.loop_variables.periods_spontaneous = periods_spontaneous.condition; 
+
+% Skip any files that don't exist (spontaneous or problem files)
+parameters.load_abort_flag = true; 
+
+% Dimension of different time range pairs.
+parameters.rangePairs = 1; 
+
+% 
+parameters.segmentDim = 1;
+parameters.concatDim = 2;
+
+% Input values. 
+% Extracted timeseries.
+parameters.loop_list.things_to_load.timeseries.dir = {[parameters.dir_exper 'behavior\eye\pupil diameters normalized\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_load.timeseries.filename= {'diameters', 'stack', '.mat'};
+parameters.loop_list.things_to_load.timeseries.variable= {'diameters'}; 
+parameters.loop_list.things_to_load.timeseries.level = 'stack';
+% Time ranges
+parameters.loop_list.things_to_load.time_ranges.dir = {[parameters.dir_exper 'behavior\spontaneous\segmented behavior periods\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_load.time_ranges.filename= {'behavior_periods_', 'stack', '.mat'};
+parameters.loop_list.things_to_load.time_ranges.variable= {'behavior_periods.', 'period'}; 
+parameters.loop_list.things_to_load.time_ranges.level = 'stack';
+
+% Output Values
+% (Convert to cell format to be compatible with motorized in below code)
+parameters.loop_list.things_to_save.segmented_timeseries.dir = {[parameters.dir_exper 'behavior\eye\segmented eye pupil diameters\spontaneous\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_save.segmented_timeseries.filename= {'segmented_timeseries_', 'stack', '.mat'};
+parameters.loop_list.things_to_save.segmented_timeseries.variable= {'segmented_timeseries{', 'period_iterator',',1}'}; 
+parameters.loop_list.things_to_save.segmented_timeseries.level = 'stack';
+
+RunAnalysis({@SegmentTimeseriesData}, parameters);
+
+%% Concatenate across behavior (spon & motorized independently) 
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterators
+parameters.loop_list.iterators = {
+               'condition', {'loop_variables.conditions'}, 'condition_iterator';
+               'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+               'stack', {'getfield(loop_variables, {1}, "mice_all", {',  'mouse_iterator', '}, "days", {', 'day_iterator', '}, ', 'loop_variables.conditions_stack_locations{', 'condition_iterator', '})'}, 'stack_iterator'; 
+               };
+
+% Dimension to concatenate the timeseries across.
+parameters.concatDim = 2; 
+parameters.concatenate_across_cells = false; 
+
+% Clear any reshaping instructions 
+if isfield(parameters, 'reshapeDims')
+    parameters = rmfield(parameters,'reshapeDims');
+end
+
+% Input Values
+parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\segmented eye pupil diameters\'],'condition', '\' 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_load.data.filename= {'segmented_timeseries_', 'stack', '.mat'};
+parameters.loop_list.things_to_load.data.variable= {'segmented_timeseries'}; 
+parameters.loop_list.things_to_load.data.level = 'stack';
+
+% Output values
+parameters.loop_list.things_to_save.concatenated_data.dir = {[parameters.dir_exper 'behavior\eye\concatenated diameters\'], 'condition', '\', 'mouse', '\'};
+parameters.loop_list.things_to_save.concatenated_data.filename= {'concatenated_diameters_all_periods.mat'};
+parameters.loop_list.things_to_save.concatenated_data.variable= {'diameters'}; 
+parameters.loop_list.things_to_save.concatenated_data.level = 'mouse';
+
+RunAnalysis({@ConcatenateData}, parameters);
+
+
+%% Concatenate spon & motorized into same cell array.
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Is so you can use a single loop for calculations. 
+parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'condition', 'loop_variables.conditions', 'condition_iterator';
+                };
+
+% Tell it to concatenate across cells, not within cells. 
+parameters.concatenate_across_cells = true; 
+parameters.concatDim = 1;
+
+% Input Values (use a trick to concatenate just the 2 conditions)
+parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\concatenated diameters\'], 'condition', '\', 'mouse', '\'};
+parameters.loop_list.things_to_load.data.filename= {'concatenated_diameters_all_periods.mat'};
+parameters.loop_list.things_to_load.data.variable= {'diameters'}; 
+parameters.loop_list.things_to_load.data.level = 'condition';
+
+% Output values
+parameters.loop_list.things_to_save.concatenated_data.dir = {[parameters.dir_exper 'behavior\eye\concatenated diameters\both conditions\'], 'mouse', '\'};
+parameters.loop_list.things_to_save.concatenated_data.filename= {'concatenated_diameters_all_periods.mat'};
+parameters.loop_list.things_to_save.concatenated_data.variable= {'diameters_all'}; 
+parameters.loop_list.things_to_save.concatenated_data.level = 'mouse';
+
+RunAnalysis({@ConcatenateData}, parameters);
+
+parameters.concatenate_across_cells = false;
+
+%% Roll diameter timeseries
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterators
+parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'period', {'loop_variables.periods'}, 'period_iterator';            
+               };
+parameters.loop_variables.mice_all = parameters.mice_all;
+parameters.loop_variables.periods = periods_bothConditions.condition;
+
+% Dimension to roll across (time dimension). Will automatically add new
+% data to the last + 1 dimension. 
+parameters.rollDim = 1; 
+
+% Window and step sizes (in frames)
+parameters.windowSize = 20;
+parameters.stepSize = 5; 
+
+% Input 
+parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\concatenated diameters\both conditions\'], 'mouse', '\'};
+parameters.loop_list.things_to_load.data.filename= {'concatenated_diameters_all_periods.mat'};
+parameters.loop_list.things_to_load.data.variable= {'diameters_all{', 'period_iterator', '}'}; 
+parameters.loop_list.things_to_load.data.level = 'mouse';
+
+% Output
+parameters.loop_list.things_to_save.data_rolled.dir = {[parameters.dir_exper 'behavior\eye\rolled concatenated diameters\'], 'mouse', '\'};
+parameters.loop_list.things_to_save.data_rolled.filename= {'diameters_rolled.mat'};
+parameters.loop_list.things_to_save.data_rolled.variable= {'diameters_rolled{', 'period_iterator', ',1}'}; 
+parameters.loop_list.things_to_save.data_rolled.level = 'mouse';
+
+parameters.loop_list.things_to_save.roll_number.dir = {[parameters.dir_exper 'behavior\eye\rolled concatenated diameters\'], 'mouse', '\'};
+parameters.loop_list.things_to_save.roll_number.filename= {'diameter_rolled_rollnumber.mat'};
+parameters.loop_list.things_to_save.roll_number.variable= {'roll_number{', 'period_iterator', ',1}'}; 
+parameters.loop_list.things_to_save.roll_number.level = 'mouse';
+
+RunAnalysis({@RollData}, parameters);
+
+%% Average diameter per roll & instance
+% Permute so instances are in last dimension
+
+
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterations.
+parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'period', {'loop_variables.periods{:}'}, 'period_iterator'};
+
+parameters.loop_variables.mice_all = parameters.mice_all;
+parameters.loop_variables.periods = periods_bothConditions.condition;
+
+% Permute data so instances are in last dimension 
+parameters.DimOrder = [1, 3, 2];
+
+% Dimension to average across 
+parameters.averageDim  = 1; 
+
+% Load & put in the "true" roll number there's supposed to be.
+load([parameters.dir_exper 'behavior\eye\rolled concatenated diameters\1087\diameter_rolled_rollnumber.mat'], 'roll_number'); 
+parameters.roll_number = roll_number;
+clear roll_number;
+
+% Evaluation instructions (put instances in last dimension)
+parameters.evaluation_instructions = {{}; {};{'if size(parameters.data,1) ~= parameters.roll_number{', 'period_iterator', '};'...
+                                        'data_evaluated = transpose(parameters.data);'...
+                                        'else;'...
+                                         'data_evaluated = parameters.data;'...
+                                         'end'}};
+
+
+parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\rolled concatenated diameters\'], 'mouse', '\'};
+parameters.loop_list.things_to_load.data.filename= {'diameters_rolled.mat'};
+parameters.loop_list.things_to_load.data.variable= {'diameters_rolled{', 'period_iterator', '}'}; 
+parameters.loop_list.things_to_load.data.level = 'mouse';
+
+parameters.loop_list.things_to_save.data_evaluated.dir = {[parameters.dir_exper 'behavior\eye\rolled concatenated diameters\'], 'mouse', '\'};
+parameters.loop_list.things_to_save.data_evaluated.filename= {'diameter_averaged_by_instance.mat'};
+parameters.loop_list.things_to_save.data_evaluated.variable= {'diameter_averaged_by_instance{', 'period_iterator',',1}'}; 
+parameters.loop_list.things_to_save.data_evaluated.level = 'mouse';
+
+parameters.loop_list.things_to_rename = {{'data_permuted', 'data'}; 
+                                         { 'average', 'data'}};
+RunAnalysis({@PermuteData, @AverageData, @EvaluateOnData}, parameters);

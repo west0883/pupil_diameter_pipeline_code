@@ -32,11 +32,12 @@ parameters.mice_all = mice_all;
 % Ex cont: stackList=ListStacks(numberVector,digitNumber); 
 % Ex cont: mice_all(1).stacks(1)=stackList;
 
-parameters.mice_all = parameters.mice_all(1:3);       %[1:6, 8]);
-parameters.mice_all(1).days = parameters.mice_all(1).days([10 12]); 
-parameters.mice_all(1).days(2).spontaneous = parameters.mice_all(1).days(2).spontaneous(1:end-1);
-parameters.mice_all(2).days = parameters.mice_all(2).days(9:10); 
-parameters.mice_all(3).days = parameters.mice_all(3).days(9:10); 
+parameters.mice_all = parameters.mice_all(3);       %[1:6, 8]);
+%parameters.mice_all(1).days = parameters.mice_all(1).days([13:17]); 
+%parameters.mice_all(1).days = parameters.mice_all(1).days(12:16); 
+%parameters.mice_all(1).days(1).stacks = parameters.mice_all(1).days(1).stacks(5:end); 
+parameters.mice_all(1).days = parameters.mice_all(1).days(13:16); 
+parameters.mice_all(1).days(1).stacks = parameters.mice_all(1).days(1).stacks(22:end); 
 
 % Give the number of digits that should be included in each stack number.
 parameters.digitNumber=2; 
@@ -56,6 +57,7 @@ parameters.fps= 20;
 parameters.channelNumber = 2;
 
 % Number of frames you recorded from brain and want to keep (don't make chunks longer than this)  
+% (after skipped frames are removed)
 parameters.frames=6000; 
 
 % Number of initial brain frames to skip, allows for brightness/image
@@ -76,7 +78,6 @@ clear periods;
 periods_bothConditions = [periods_motorized; periods_spontaneous]; 
 
 % Loop variables.
-parameters.loop_variables.data_type = {'correlations', 'PCA scores individual mouse'};
 parameters.loop_variables.mice_all = parameters.mice_all;
 parameters.loop_variables.conditions = {'motorized'; 'spontaneous'};
 parameters.loop_variables.conditions_stack_locations = {'stacks'; 'spontaneous'};
@@ -108,7 +109,7 @@ parameters.loop_list.things_to_load.import_in.load_function = @importdata;
 parameters.loop_list.things_to_save.import_out.dir = {[parameters.dir_exper 'behavior\eye\extracted pupil tracking\'], 'mouse', '\', 'day', '\'};
 parameters.loop_list.things_to_save.import_out.filename= {'trial', 'stack_name', '.mat'};
 parameters.loop_list.things_to_save.import_out.variable= {'trial'}; 
-parameters.loop_list.things_to_save.import_out.level = 'stack';
+parameters.loop_list.things_to_save.import_out.level = 'stack_name';
 
 RunAnalysis({@ImportDLCPupilData}, parameters)
 
@@ -320,7 +321,7 @@ parameters.loop_list.things_to_save.segmented_timeseries.level = 'stack';
 
 RunAnalysis({@SegmentTimeseriesData}, parameters);
 
-%% Concatenate across behavior (spon & motorized independently) 
+%% Concatenate within behavior (spon & motorized independently) 
 % Always clear loop list first. 
 if isfield(parameters, 'loop_list')
 parameters = rmfield(parameters,'loop_list');
@@ -356,7 +357,6 @@ parameters.loop_list.things_to_save.concatenated_data.variable= {'diameters'};
 parameters.loop_list.things_to_save.concatenated_data.level = 'mouse';
 
 RunAnalysis({@ConcatenateData}, parameters);
-
 
 %% Concatenate spon & motorized into same cell array.
 if isfield(parameters, 'loop_list')
@@ -431,7 +431,6 @@ RunAnalysis({@RollData}, parameters);
 %% Average diameter per roll & instance
 % Permute so instances are in last dimension
 
-
 % Always clear loop list first. 
 if isfield(parameters, 'loop_list')
 parameters = rmfield(parameters,'loop_list');
@@ -476,3 +475,32 @@ parameters.loop_list.things_to_save.data_evaluated.level = 'mouse';
 parameters.loop_list.things_to_rename = {{'data_permuted', 'data'}; 
                                          { 'average', 'data'}};
 RunAnalysis({@PermuteData, @AverageData, @EvaluateOnData}, parameters);
+
+%% Figure out how much of the pupil data is missing per mouse, per behavior
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterations.
+parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'period', {'loop_variables.periods{:}'}, 'period_iterator'};
+
+parameters.loop_variables.mice_all = parameters.mice_all;
+parameters.loop_variables.periods = periods_bothConditions.condition;
+
+parameters.evaluation_instructions = {{'data_evaluated = sum(isnan(parameters.data),"all")/numel(parameters.data);'}};
+
+% Input 
+parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\rolled concatenated diameters\'], 'mouse', '\'};
+parameters.loop_list.things_to_load.data.filename= {'diameter_averaged_by_instance.mat'};
+parameters.loop_list.things_to_load.data.variable= {'diameter_averaged_by_instance{', 'period_iterator',',1}'}; 
+parameters.loop_list.things_to_load.data.level = 'mouse';
+
+% Output 
+parameters.loop_list.things_to_save.data_evaluated.dir = {[parameters.dir_exper 'behavior\eye\rolled concatenated diameters\'], 'mouse', '\'};
+parameters.loop_list.things_to_save.data_evaluated.filename= {'diameter_isnan_ratio.mat'};
+parameters.loop_list.things_to_save.data_evaluated.variable= {'diameter_isnan_ratio{', 'period_iterator',',1}'}; 
+parameters.loop_list.things_to_save.data_evaluated.level = 'mouse';
+
+RunAnalysis({@EvaluateOnData}, parameters);

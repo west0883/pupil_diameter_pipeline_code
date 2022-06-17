@@ -233,8 +233,66 @@ parameters.loop_list.things_to_save.data_evaluated.level = 'stack';
 
 RunAnalysis({@EvaluateOnData}, parameters);
 
-%% Motirized: Segment by behavior
+%% If a stack of pupil diameters is missing, a vector of NaNs is created.
+% This is so the instances stay properly aligned with fluorescence data
+% Checks in \eye\pupil diameters\, puts into \eye\pupil diameters normalized
 
+% missing_eye_data
+
+%% Pad short stacks with NaNs.
+% Sometimes the behavior cameras were 50-100 frames short, but we still
+% want the data that DID get collected. Without this, the segmentation
+% steps will throw errors. 
+
+% Not running with RunAnalysis because you don't have to load each of them
+% to check their length.
+
+% Folder/filenames you're checking.
+parameters.filename_forcheck =  {[parameters.dir_exper 'behavior\eye\pupil diameters normalized\'], 'mouse', '\', 'day', '\diameters', 'stack', '.mat'};
+
+parameters.loop_list.iterators = {
+               'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+               'condition', {'loop_variables.conditions'}, 'condition_iterator';
+               'stack', {'getfield(loop_variables, {1}, "mice_all", {',  'mouse_iterator', '}, "days", {', 'day_iterator', '}, ', 'loop_variables.conditions_stack_locations{', 'condition_iterator', '})'}, 'stack_iterator'; 
+               };
+
+looping_output_list = LoopGenerator(parameters.loop_list, parameters.loop_variables); 
+
+% For each element of looping_output_list, 
+for itemi = 1:size(looping_output_list,1)
+
+    % Get keywords, like in RunAnalysis
+    parameters.keywords = [parameters.loop_list.iterators(:,1); parameters.loop_list.iterators(:,3)];
+    
+    % Get values, like in RunAnalysis
+    parameters.values = cell(size(parameters.keywords));
+    for i = 1: numel(parameters.keywords)
+        parameters.values{i} = looping_output_list(itemi).(cell2mat(parameters.keywords(i)));
+    end
+
+    % Get the filename 
+    filestring = CreateStrings(parameters.filename_forcheck, parameters.keywords, parameters.values);
+
+    % Usin matfile objects, check size of the file
+    mat_object = matfile(filestring, 'diameters');
+
+    % If less than frames
+    if size(mat_object, 1) < parameters.frames
+
+        % Load.
+        load(filestring, 'diameters');
+
+        % Pad 
+        short_number = parameters.frames - size(diameters,1);
+        diameters = [diameters; NaN(short_number, 1)]; 
+
+        % Save
+        save(filestring, 'diameters');
+    end
+end
+
+%% Motirized: Segment by behavior
 % Always clear loop list first. 
 if isfield(parameters, 'loop_list')
 parameters = rmfield(parameters,'loop_list');

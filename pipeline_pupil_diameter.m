@@ -32,12 +32,10 @@ parameters.mice_all = mice_all;
 % Ex cont: stackList=ListStacks(numberVector,digitNumber); 
 % Ex cont: mice_all(1).stacks(1)=stackList;
 
-parameters.mice_all = parameters.mice_all(3);       %[1:6, 8]);
+parameters.mice_all = parameters.mice_all;     
 %parameters.mice_all(1).days = parameters.mice_all(1).days([13:17]); 
 %parameters.mice_all(1).days = parameters.mice_all(1).days(12:16); 
 %parameters.mice_all(1).days(1).stacks = parameters.mice_all(1).days(1).stacks(5:end); 
-parameters.mice_all(1).days = parameters.mice_all(1).days(13:16); 
-parameters.mice_all(1).days(1).stacks = parameters.mice_all(1).days(1).stacks(22:end); 
 
 % Give the number of digits that should be included in each stack number.
 parameters.digitNumber=2; 
@@ -98,6 +96,9 @@ parameters.loop_list.iterators = {
                'stack_name', { 'dir("Y:\Sarah\Data\Random Motorized Treadmill\', 'day', '\', 'mouse', '\eye\eye*filtered.csv").name'}, 'stack_name_iterator'; 
                };
 
+% Abort analysis if there's no corresponding file.
+parameters.load_abort_flag = true; 
+
 % Input values
 parameters.loop_list.things_to_load.import_in.dir = {'Y:\Sarah\Data\Random Motorized Treadmill\', 'day', '\', 'mouse', '\eye\'};
 parameters.loop_list.things_to_load.import_in.filename= {'stack_name'}; 
@@ -111,8 +112,10 @@ parameters.loop_list.things_to_save.import_out.filename= {'trial', 'stack_name',
 parameters.loop_list.things_to_save.import_out.variable= {'trial'}; 
 parameters.loop_list.things_to_save.import_out.level = 'stack_name';
 
+profile on;
 RunAnalysis({@ImportDLCPupilData}, parameters)
-
+profile off;
+profile viewer;
 %% Fit circles to pupil edges
 % Always clear loop list first. 
 if isfield(parameters, 'loop_list')
@@ -129,6 +132,9 @@ parameters.loop_list.iterators = {
 
 % Number of points plotted
 parameters.numberOfPoints = 8;
+
+% Abort analysis if there's no corresponding file.
+parameters.load_abort_flag = true; 
 
 % Columns of position data.
 parameters.xPositionColumns = 2:3: parameters.numberOfPoints * 3 + 1;

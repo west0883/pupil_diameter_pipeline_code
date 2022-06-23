@@ -26,7 +26,7 @@ parameters.mice_all = mice_all;
 % Ex: numberVector=2:12; digitNumber=2;
 % Ex cont: stackList=ListStacks(numberVector,digitNumber); 
 % Ex cont: mice_all(1).stacks(1)=stackList;
-parameters.mice_all = parameters.mice_all([1:6, 8]);
+parameters.mice_all = parameters.mice_all;
 
 % Give the number of digits that should be included in each stack number.
 parameters.digitNumber=2; 

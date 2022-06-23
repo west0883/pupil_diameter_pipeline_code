@@ -32,10 +32,7 @@ parameters.mice_all = mice_all;
 % Ex cont: stackList=ListStacks(numberVector,digitNumber); 
 % Ex cont: mice_all(1).stacks(1)=stackList;
 
-parameters.mice_all = parameters.mice_all;     
-%parameters.mice_all(1).days = parameters.mice_all(1).days([13:17]); 
-%parameters.mice_all(1).days = parameters.mice_all(1).days(12:16); 
-%parameters.mice_all(1).days(1).stacks = parameters.mice_all(1).days(1).stacks(5:end); 
+parameters.mice_all = parameters.mice_all;    
 
 % Give the number of digits that should be included in each stack number.
 parameters.digitNumber=2; 
@@ -80,6 +77,15 @@ parameters.loop_variables.mice_all = parameters.mice_all;
 parameters.loop_variables.conditions = {'motorized'; 'spontaneous'};
 parameters.loop_variables.conditions_stack_locations = {'stacks'; 'spontaneous'};
 
+% If it exists, load mice_all_no_missing_data.m
+if isfile([parameters.dir_exper 'behavior\eye\mice_all_no_missing_data.mat'])
+    load([parameters.dir_exper 'behavior\eye\mice_all_no_missing_data.mat']);
+
+    % put into loop_variables
+    parameters.loop_variables.mice_all_no_missing_data = mice_all_no_missing_data;
+
+end
+
 %% Import DeepLabCut pupil extraction data. 
 % Calls ImportDLCPupilData.m, but that function doesn't really do anything,
 % as RunAnalysis can import it in with a load function.
@@ -112,11 +118,10 @@ parameters.loop_list.things_to_save.import_out.filename= {'trial', 'stack_name',
 parameters.loop_list.things_to_save.import_out.variable= {'trial'}; 
 parameters.loop_list.things_to_save.import_out.level = 'stack_name';
 
-profile on;
 RunAnalysis({@ImportDLCPupilData}, parameters)
-profile off;
-profile viewer;
-%% Fit circles to pupil edges
+
+%% Search for data that wasn't imported
+
 % Always clear loop list first. 
 if isfield(parameters, 'loop_list')
 parameters = rmfield(parameters,'loop_list');
@@ -128,6 +133,36 @@ parameters.loop_list.iterators = {
                'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
                'condition', {'loop_variables.conditions'}, 'condition_iterator';
                'stack', {'getfield(loop_variables, {1}, "mice_all", {',  'mouse_iterator', '}, "days", {', 'day_iterator', '}, ', 'loop_variables.conditions_stack_locations{', 'condition_iterator', '})'}, 'stack_iterator'; 
+               };
+
+
+% Input values
+parameters.loop_list.things_to_check.dir = {[parameters.dir_exper 'behavior\eye\extracted pupil tracking\'], 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_check.filename= {'trialeye', 'stack', '*.mat'};  
+
+% Output
+parameters.loop_list.missing_data.dir = {[parameters.dir_exper 'behavior\eye\']};
+parameters.loop_list.missing_data.filename= {'missing_data.mat'};
+
+SearchForData(parameters)
+
+%% Make a mice_all that doesn't have the missing eye data in it.
+% create_mice_all_no_missing_eyedata.m
+
+
+%% Fit circles to pupil edges
+% Using mice_all_no_missing_data
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterators
+parameters.loop_list.iterators = {
+               'mouse', {'loop_variables.mice_all_no_missing_data(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all_no_missing_data(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+               'condition', {'loop_variables.conditions'}, 'condition_iterator';
+               'stack', {'getfield(loop_variables, {1}, "mice_all_no_missing_data", {',  'mouse_iterator', '}, "days", {', 'day_iterator', '}, ', 'loop_variables.conditions_stack_locations{', 'condition_iterator', '})'}, 'stack_iterator'; 
                };
 
 % Number of points plotted
@@ -168,6 +203,7 @@ RunAnalysis({@FitCircles}, parameters);
 % Concatenate the max pupil diameters of each stack in a day, then take
 % maximum. (Max is taken after each concatenation, but only the last is
 % saved.)
+% Use mice_all_no_missing_data
 if isfield(parameters, 'loop_list')
 parameters = rmfield(parameters,'loop_list');
 end
@@ -175,9 +211,9 @@ end
 % Iterators   
 % Both motorized & spontaneous stacks are concatenated together.
 parameters.loop_list.iterators = {
-               'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
-               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
-               'stack', {'[loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').stacks; loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').spontaneous]'}, 'stack_iterator';
+               'mouse', {'loop_variables.mice_all_no_missing_data(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all_no_missing_data(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+               'stack', {'[loop_variables.mice_all_no_missing_data(',  'mouse_iterator', ').days(', 'day_iterator', ').stacks; loop_variables.mice_all_no_missing_data(',  'mouse_iterator', ').days(', 'day_iterator', ').spontaneous]'}, 'stack_iterator';
                  };
 
 parameters.concatDim = 1;
@@ -205,6 +241,7 @@ parameters = rmfield(parameters, 'concatenation_level');
 
 %% Normalize pupil diameters by proportion of max per day
 % Always clear loop list first. 
+% Use mice_all_nomissing_data
 if isfield(parameters, 'loop_list')
 parameters = rmfield(parameters,'loop_list');
 end
@@ -212,9 +249,9 @@ end
 % Iterators   
 % Both motorized & spontaneous stacks are concatenated together.
 parameters.loop_list.iterators = {
-               'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
-               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
-               'stack', {'[loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').stacks; loop_variables.mice_all(',  'mouse_iterator', ').days(', 'day_iterator', ').spontaneous]'}, 'stack_iterator';
+               'mouse', {'loop_variables.mice_all_no_missing_data(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all_no_missing_data(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+               'stack', {'[loop_variables.mice_all_no_missing_data(',  'mouse_iterator', ').days(', 'day_iterator', ').stacks; loop_variables.mice_all_no_missing_data(',  'mouse_iterator', ').days(', 'day_iterator', ').spontaneous]'}, 'stack_iterator';
                  };
 
 parameters.evaluation_instructions = {{'data_evaluated = parameters.data./parameters.max_diameter;'}};
@@ -239,12 +276,6 @@ parameters.loop_list.things_to_save.data_evaluated.level = 'stack';
 
 RunAnalysis({@EvaluateOnData}, parameters);
 
-%% If a stack of pupil diameters is missing, a vector of NaNs is created.
-% This is so the instances stay properly aligned with fluorescence data
-% Checks in \eye\pupil diameters\, puts into \eye\pupil diameters normalized
-
-% missing_eye_data
-
 %% Pad short stacks with NaNs.
 % Sometimes the behavior cameras were 50-100 frames short, but we still
 % want the data that DID get collected. Without this, the segmentation
@@ -257,10 +288,10 @@ RunAnalysis({@EvaluateOnData}, parameters);
 parameters.filename_forcheck =  {[parameters.dir_exper 'behavior\eye\pupil diameters normalized\'], 'mouse', '\', 'day', '\diameters', 'stack', '.mat'};
 
 parameters.loop_list.iterators = {
-               'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
-               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+               'mouse', {'loop_variables.mice_all_no_missing_data(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all_no_missing_data(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
                'condition', {'loop_variables.conditions'}, 'condition_iterator';
-               'stack', {'getfield(loop_variables, {1}, "mice_all", {',  'mouse_iterator', '}, "days", {', 'day_iterator', '}, ', 'loop_variables.conditions_stack_locations{', 'condition_iterator', '})'}, 'stack_iterator'; 
+               'stack', {'getfield(loop_variables, {1}, "mice_all_no_missing_data", {',  'mouse_iterator', '}, "days", {', 'day_iterator', '}, ', 'loop_variables.conditions_stack_locations{', 'condition_iterator', '})'}, 'stack_iterator'; 
                };
 
 looping_output_list = LoopGenerator(parameters.loop_list, parameters.loop_variables); 
@@ -298,6 +329,11 @@ for itemi = 1:size(looping_output_list,1)
     end
 end
 
+%% If a stack of pupil diameters is missing, a vector of NaNs is created.
+% This is so the instances stay properly aligned with fluorescence data
+% Checks in \eye\pupil diameters\, puts into \eye\pupil diameters normalized
+
+% missing_eye_data
 %% Motirized: Segment by behavior
 % Always clear loop list first. 
 if isfield(parameters, 'loop_list')
@@ -436,7 +472,7 @@ parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 
 parameters.concatenate_across_cells = true; 
 parameters.concatDim = 1;
 
-% Input Values (use a trick to concatenate just the 2 conditions)
+% Input Values 
 parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\concatenated diameters\'], 'condition', '\', 'mouse', '\'};
 parameters.loop_list.things_to_load.data.filename= {'concatenated_diameters_all_periods.mat'};
 parameters.loop_list.things_to_load.data.variable= {'diameters'}; 

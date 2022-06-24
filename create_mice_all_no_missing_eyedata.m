@@ -2,12 +2,12 @@
 % Sarah West
 % 6/22/22
 
+
 % Load list of missing data
 load('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\missing_data.mat');
 
 % Load mice_all
 load('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\mice_all.mat');
-
 
 % Make the list to search through
 parameters.loop_list.iterators = {

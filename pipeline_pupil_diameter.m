@@ -71,6 +71,9 @@ clear periods;
 
 % Create a shared motorized & spontaneous list.
 periods_bothConditions = [periods_motorized; periods_spontaneous]; 
+parameters.periods_bothConditions = periods_bothConditions;
+parameters.periods_motorized = periods_motorized;
+parameters.periods_spontaneous = periods_spontaneous;
 
 % Loop variables.
 parameters.loop_variables.mice_all = parameters.mice_all;
@@ -121,11 +124,6 @@ parameters.loop_list.things_to_save.import_out.level = 'stack_name';
 RunAnalysis({@ImportDLCPupilData}, parameters)
 
 %% Search for data that wasn't imported
-
-% Always clear loop list first. 
-if isfield(parameters, 'loop_list')
-parameters = rmfield(parameters,'loop_list');
-end
 
 % Iterators
 parameters.loop_list.iterators = {
@@ -308,14 +306,16 @@ for itemi = 1:size(looping_output_list,1)
         parameters.values{i} = looping_output_list(itemi).(cell2mat(parameters.keywords(i)));
     end
 
+    MessageToUser('Checking ', parameters);
+
     % Get the filename 
     filestring = CreateStrings(parameters.filename_forcheck, parameters.keywords, parameters.values);
 
     % Usin matfile objects, check size of the file
-    mat_object = matfile(filestring, 'diameters');
+    mat_object = matfile(filestring);
 
     % If less than frames
-    if size(mat_object, 1) < parameters.frames
+    if size(mat_object.diameters, 1) < parameters.frames
 
         % Load.
         load(filestring, 'diameters');
@@ -323,6 +323,9 @@ for itemi = 1:size(looping_output_list,1)
         % Pad 
         short_number = parameters.frames - size(diameters,1);
         diameters = [diameters; NaN(short_number, 1)]; 
+
+        % Tell user.
+        disp(['Stack short by ' num2str(short_number) ' frames.']);
 
         % Save
         save(filestring, 'diameters');
@@ -333,7 +336,7 @@ end
 % This is so the instances stay properly aligned with fluorescence data
 % Checks in \eye\pupil diameters\, puts into \eye\pupil diameters normalized
 
-% missing_eye_data
+% missing_eye_data.m
 %% Motirized: Segment by behavior
 % Always clear loop list first. 
 if isfield(parameters, 'loop_list')
@@ -420,6 +423,53 @@ parameters.loop_list.things_to_save.segmented_timeseries.variable= {'segmented_t
 parameters.loop_list.things_to_save.segmented_timeseries.level = 'stack';
 
 RunAnalysis({@SegmentTimeseriesData}, parameters);
+
+%% Look for stacks when number of instances don't match those of fluorescence.
+% (Just do motorized rest, that's the one you're having problems with).
+% Don't need to load, so don't use RunAnalysis.
+
+parameters.loop_list.iterators = {
+               'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'day', {'loop_variables.mice_all(', 'mouse_iterator', ').days(:).name'}, 'day_iterator';
+               'condition', {'loop_variables.conditions'}, 'condition_iterator';
+               'stack', {'getfield(loop_variables, {1}, "mice_all", {',  'mouse_iterator', '}, "days", {', 'day_iterator', '}, ', 'loop_variables.conditions_stack_locations{', 'condition_iterator', '})'}, 'stack_iterator'; 
+               };
+
+% Input values
+parameters.loop_list.things_to_check.dir = {[parameters.dir_exper 'behavior\eye\segmented eye pupil diameters\'], 'condition', '\', 'mouse', '\', 'day', '\'};
+parameters.loop_list.things_to_check.filename= {'segmented_timeseries_', 'stack', '.mat'};  
+parameters.loop_list.things_to_check.variable = {'segmented_timeseries'};
+
+parameters.loop_list.check_against.dir = {[parameters.dir_exper 'fluorescence analysis\segmented timeseries\'], 'condition', '\', 'mouse', '\', 'day', '\'};
+parameters.loop_list.check_against.filename= {'segmented_timeseries_', 'stack', '.mat'};  
+parameters.loop_list.check_against.variable = {'segmented_timeseries'};
+
+% Output
+parameters.loop_list.mismatched_data.dir = {[parameters.dir_exper 'behavior\eye\']};
+parameters.loop_list.mismatched_data.filename= {'mismatched_data.mat'};
+
+CheckSizes(parameters);
+
+%% Notes for removal.
+% From first round:
+% % '1087'	'011222'	'motorized'	'11'	180
+% % --> get rid of the last instance, the fluoresence was short by ~20 frames
+% load('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\segmented eye pupil diameters\motorized\1087\011222\segmented_timeseries_11.mat')
+% segmented_timeseries{180} = segmented_timeseries{180}(:, 1:end-1);
+% save('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\segmented eye pupil diameters\motorized\1087\011222\segmented_timeseries_11.mat', 'segmented_timeseries')
+% 
+% %'1088'	'010522'	'motorized'	'11'	180 
+% % --> same as above
+% load('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\segmented eye pupil diameters\motorized\1088\010522\segmented_timeseries_11.mat')
+% segmented_timeseries{180} = segmented_timeseries{180}(:, 1:end-1);
+% save('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\segmented eye pupil diameters\motorized\1088\010522\segmented_timeseries_11.mat', 'segmented_timeseries')
+% 
+% % '1088'	'011322'	'motorized'	'06'	180
+% % short by 2 frames; remove last 2 instances. 
+% load('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\segmented eye pupil diameters\motorized\1088\011322\segmented_timeseries_06.mat')
+% segmented_timeseries{180} = segmented_timeseries{180}(:, 1:end-2);
+% save('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\segmented eye pupil diameters\motorized\1088\011322\segmented_timeseries_06.mat', 'segmented_timeseries')
+
 
 %% Concatenate within behavior (spon & motorized independently) 
 % Always clear loop list first. 
@@ -589,8 +639,8 @@ parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 
 parameters.loop_variables.mice_all = parameters.mice_all;
 parameters.loop_variables.periods = periods_bothConditions.condition;
 
-parameters.evaluation_instructions = {{'data_evaluated = sum(isnan(parameters.data),"all")/numel(parameters.data);'}};
-
+parameters.evaluation_instructions = {{'data_evaluated = sum(isnan(parameters.data),"all")/numel(parameters.data);'}}; 
+                                        
 % Input 
 parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\rolled concatenated diameters\'], 'mouse', '\'};
 parameters.loop_list.things_to_load.data.filename= {'diameter_averaged_by_instance.mat'};
@@ -604,3 +654,30 @@ parameters.loop_list.things_to_save.data_evaluated.variable= {'diameter_isnan_ra
 parameters.loop_list.things_to_save.data_evaluated.level = 'mouse';
 
 RunAnalysis({@EvaluateOnData}, parameters);
+
+
+%% Plot histograms of the ratio of missing data.
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterations.
+parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'};
+
+parameters.loop_variables.mice_all = parameters.mice_all;
+
+% Input 
+parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\rolled concatenated diameters\'], 'mouse', '\'};
+parameters.loop_list.things_to_load.data.filename= {'diameter_isnan_ratio.mat'};
+parameters.loop_list.things_to_load.data.variable= {'diameter_isnan_ratio'}; 
+parameters.loop_list.things_to_load.data.level = 'mouse';
+
+% Output
+parameters.loop_list.things_to_save.fig.dir = {[parameters.dir_exper 'behavior\eye\rolled concatenated diameters\'], 'mouse', '\'};
+parameters.loop_list.things_to_save.fig.filename= {'diameter_isnan_ratio_histogram.fig'};
+parameters.loop_list.things_to_save.fig.variable= {'fig'}; 
+parameters.loop_list.things_to_save.fig.level = 'mouse';
+
+RunAnalysis({@HistogramOfRatios}, parameters);
+

@@ -48,31 +48,14 @@ parameters.loop_variables.conditions_stack_locations = {'stacks'; 'spontaneous'}
 parameters.input_filename = {[parameters.dir_exper '\behavior\eye\pupil diameters\'], 'mouse', '\', 'day', '\', 'trial', 'stack', '.mat'};
 
 % Output filename
-parameters.output_filename =  {[parameters.dir_exper '\behavior\eye\pupil diameters normalized\'], 'mouse', '\', 'day', '\', 'diameters', 'stack', '.mat'};
+parameters.output_directory =  {[parameters.dir_exper '\behavior\eye\pupil diameters normalized\'], 'mouse', '\', 'day', '\'};
+parameters.output_filename = {'diameters', 'stack', '.mat'};
 
 % Directory/filename for where to save list of missing data.
 parameters.missing_data_filename =  [parameters.dir_exper '\behavior\eye\missing_eye_data.mat'];
 
 % Initialize counter for cells.
 counter = 0;
-
-%% Stacks known to be missing, from "Recordings list" spreadsheet
-% You don't REALLY need this here, but it's convenient for seeing which
-% data "should" be here & which can likely still be found.
-for i = 1:4 
-    counter = counter + 1; 
-    missing_data(i, :) = {'1087', '112121', sprintf(['%0' digitChar 'd'], i)};
-end
-
-counter = counter + 1;
-missing_data(counter, :) = {'1087', '011122', '16'};
-
-counter = counter + 1;
-missing_data(counter, :) = {'1100', '012622', '09'};
-
-counter = counter + 1;
-missing_data(counter, :) = {'1107', '020122', '12'};
-
 
 %% Run through mice_all, search all pupil diameters calculated.
 parameters.loop_list.iterators = {
@@ -124,23 +107,19 @@ diameters = NaN(parameters.frames, 1);
 % For each entry in missing_data,
 for itemi = 1:size(missing_data,1)
      
-    % Make a file name
+    % Make directory & filenames
+    dir_string = CreateStrings(parameters.output_directory, parameters.keywords, missing_data(itemi, :));
     filestring = CreateStrings(parameters.output_filename, parameters.keywords, missing_data(itemi, :));
 
+    % Make output directory, if it doesn't already exist.
+    if ~exist(dir_string, 'dir')
+        mkdir(dir_string);
+    end
+
     % Save the NaN vector under the name of the missing data stack.
-    save(filestring, 'diameters');
+    save([dir_string filestring], 'diameters');
 
 end
 
-
-%% Make a list of stacks/days to rerun now that you have a list of days 
-% that "should" be missing.
-
-% Reset counter.
-counter = 0;
-
-% List of stacks to rerun (each entry is a row, columns are mouse, day,
-% stack).
-stacks_to_rerun = cell(1,3);
 
 

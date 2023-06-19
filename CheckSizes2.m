@@ -11,7 +11,7 @@ function [] = CheckSizes2(parameters)
     looping_output_list = LoopGenerator(parameters.loop_list, parameters.loop_variables);
 
     % Initialize missing data cell array. 
-    mismatched_data = cell(1, size(parameters.loop_list.iterators,1) + 1);
+    mismatched_data = cell(1, size(parameters.loop_list.iterators,1) + 2);
     
     try 
     % For each item in looping output list,
@@ -70,37 +70,35 @@ function [] = CheckSizes2(parameters)
         condition = parameters.values{location};
 
         % Get sizes of checking and checking against
-        checking_sizes = cellfun('size', file_object_check_against.segmented_timeseries, 3);
-        checking_against_sizes = cellfun('size', file_object_check_against.segmented_timeseries, 1);
-        if strcmp(condition, 'motorized') 
-            periods = parameters.periods_motorized;
 
-        else
-            periods = parameters.periods_spontaneous;
-        end
+        % need to see which cells are empty in the checking, because 3rd
+        % dimension of empty comes back as 1
+        empties_checking =cellfun(@isempty, file_object_checking.segmented_timeseries);
+        empties_check_against =cellfun(@isempty, file_object_check_against.segmented_timeseries);
+        
+        % get sizes
+        checking_sizes = cellfun('size', file_object_checking.segmented_timeseries, 2);
+        check_against_sizes = cellfun('size', file_object_check_against.segmented_timeseries, 3);
+      
+        % Make empty checking sizes = 0. 
+        checking_sizes(empties_checking) = 0;
+        check_against_sizes(empties_check_against) = 0;
 
-        str
-        % For each period you want to look at, 
-        for periodi = 1:size(periods,1)
+        % Compare sizes 
+        size_comparison = checking_sizes == check_against_sizes;
 
-            % if these files don't exist, skip 
-            
-            subholder_checking = file_object_checking.segmented_timeseries(periodi,1);
-            subholder_check_against = file_object_check_against.segmented_timeseries(periodi,1);
+        % If there are any mismatches
+        if ~any(size_comparison)
 
-            % If they're not empty,
-            if ~isempty(subholder_check_against{1})
-                % Compare the sizes. If they don't match,
-                if size(subholder_checking{1}, 1) ~= size(subholder_check_against{1}, 1) || size(subholder_checking{1}, 2) ~= size(subholder_check_against{1}, 3) 
+            ind = find(size_comparison == 0);
+            disp('Found mismatch');
     
-                    disp('Found mismatch');
-    
-                    % Add to list of mismatched 
-                    mismatched_data = [mismatched_data; parameters.values(1:end/2)' {periodi}];
-    
-                end
-            end
-        end
+            % Add to list of mismatched 
+            mismatched_data = [mismatched_data; parameters.values(1:end/2)' {periodi} {ind}];
+
+
+        end 
+               
     end
    
     catch

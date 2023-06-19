@@ -101,7 +101,7 @@ function [] = CheckSizes2(parameters)
         size_comparison = checking_sizes == check_against_sizes;
 
         % If there are any mismatches
-        if ~any(size_comparison)
+        if any(size_comparison == 0)
 
             ind = find(size_comparison == 0);
             disp('Found mismatch');

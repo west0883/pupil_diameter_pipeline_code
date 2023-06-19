@@ -75,13 +75,8 @@ function [] = CheckSizes2(parameters)
         end
 
         % If using a substructure, pull out the needed variable
-        if parameters.use_substructure
-            eval(['checking_variable = file_object_checking.' variable_string_checking ';']); 
-            eval(['check_against_variable = file_object_check_against.' variable_string_check_against ';']); 
-        else
-            checking_variable = file_object_checking;
-            check_against_variable = file_object_check_against;
-        end 
+        eval(['checking_variable = file_object_checking.' variable_string_checking ';']); 
+        eval(['check_against_variable = file_object_check_against.' variable_string_check_against ';']); 
 
         if ~iscell(checking_variable)
             checking_variable = {checking_variable};

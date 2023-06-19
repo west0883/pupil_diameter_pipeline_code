@@ -11,9 +11,9 @@ function [] = CheckSizes2(parameters)
     looping_output_list = LoopGenerator(parameters.loop_list, parameters.loop_variables);
 
     % Initialize missing data cell array. 
-    mismatched_data = cell(1, size(parameters.loop_list.iterators,1) + 2);
+    mismatched_data = cell(1, size(parameters.loop_list.iterators,1) + 1);
     
-    try 
+    %try 
     % For each item in looping output list,
     for itemi = 1:size(looping_output_list,1)
     
@@ -45,7 +45,11 @@ function [] = CheckSizes2(parameters)
 
         % Create object for data file.
         if isfile([input_dir filename])
-            file_object_checking = matfile([input_dir filename]);
+            if parameters.use_substructure
+                 file_object_checking = load([input_dir filename]);
+            else
+                 file_object_checking = matfile([input_dir filename]);
+            end 
         else
             continue
         end
@@ -60,25 +64,39 @@ function [] = CheckSizes2(parameters)
         variable_string_check_against = CreateStrings(variable_cell,parameters.keywords, parameters.values);
 
         if isfile([input_dir filename])
-            file_object_check_against = matfile([input_dir filename]);
+            if parameters.use_substructure
+                 file_object_check_against= load([input_dir filename]);
+            else
+                 file_object_check_against = matfile([input_dir filename]);
+            end 
         else
+            MessageToUser('No file found for ', parameters);
             continue
         end
 
-        % Get the condition name 
-        location = strcmp(parameters.keywords, {'condition'});
-        condition = parameters.values{location};
+        % If using a substructure, pull out the needed variable
+        if parameters.use_substructure
+            eval(['checking_variable = file_object_checking.' variable_string_checking ';']); 
+            eval(['check_against_variable = file_object_check_against.' variable_string_check_against ';']); 
+        else
+            checking_variable = file_object_checking;
+            check_against_variable = file_object_check_against;
+        end 
+
+        if ~iscell(checking_variable)
+            checking_variable = {checking_variable};
+        end 
 
         % Get sizes of checking and checking against
 
         % need to see which cells are empty in the checking, because 3rd
         % dimension of empty comes back as 1
-        empties_checking =cellfun(@isempty, file_object_checking.segmented_timeseries);
-        empties_check_against =cellfun(@isempty, file_object_check_against.segmented_timeseries);
+        empties_checking = cellfun(@isempty, checking_variable);
+        empties_check_against =cellfun(@isempty,check_against_variable);
         
         % get sizes
-        checking_sizes = cellfun('size', file_object_checking.segmented_timeseries, 2);
-        check_against_sizes = cellfun('size', file_object_check_against.segmented_timeseries, 3);
+        checking_sizes = cellfun('size', checking_variable, parameters.checkingDim);
+        check_against_sizes = cellfun('size',check_against_variable, parameters.check_againstDim);
       
         % Make empty checking sizes = 0. 
         checking_sizes(empties_checking) = 0;
@@ -94,26 +112,26 @@ function [] = CheckSizes2(parameters)
             disp('Found mismatch');
     
             % Add to list of mismatched 
-            mismatched_data = [mismatched_data; parameters.values(1:end/2)' {periodi} {ind}];
+            mismatched_data = [mismatched_data; parameters.values(1:end/2)' {ind}];
 
 
         end 
                
     end
    
-    catch
-
-        % Get output file name strings.
-        dir_cell = parameters.loop_list.mismatched_data.dir;
-        filename_cell = parameters.loop_list.mismatched_data.filename;
-       
-        output_dir = CreateStrings(dir_cell,parameters.keywords, parameters.values);
-        filename = CreateStrings(filename_cell,parameters.keywords, parameters.values);
-      
-        MessageToUser('Error at ', parameters);
-        % Save
-        save([output_dir filename], 'mismatched_data', '-v7.3');
-    end
+%     catch
+% 
+%         % Get output file name strings.
+%         dir_cell = parameters.loop_list.mismatched_data.dir;
+%         filename_cell = parameters.loop_list.mismatched_data.filename;
+%        
+%         output_dir = CreateStrings(dir_cell,parameters.keywords, parameters.values);
+%         filename = CreateStrings(filename_cell,parameters.keywords, parameters.values);
+%       
+%         MessageToUser('Error at ', parameters);
+%         % Save
+%         save([output_dir filename], 'mismatched_data', '-v7.3');
+%     end
 
 
         % Get output file name strings.

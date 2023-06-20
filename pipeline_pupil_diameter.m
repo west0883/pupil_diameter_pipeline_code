@@ -336,7 +336,7 @@ end
 % This is so the instances stay properly aligned with fluorescence data
 % Checks in \eye\pupil diameters\, puts into \eye\pupil diameters normalized
 
-% missing_eye_data.m
+missing_eye_data.m
 %% Motirized: Segment by behavior
 % Always clear loop list first. 
 if isfield(parameters, 'loop_list')
@@ -425,7 +425,6 @@ parameters.loop_list.things_to_save.segmented_timeseries.level = 'stack';
 RunAnalysis({@SegmentTimeseriesData}, parameters);
 
 %% Look for stacks when number of instances don't match those of fluorescence.
-% (Just do motorized rest, that's the one you're having problems with).
 % Don't need to load, so don't use RunAnalysis.
 
 parameters.loop_list.iterators = {
@@ -434,7 +433,9 @@ parameters.loop_list.iterators = {
                'condition', {'loop_variables.conditions'}, 'condition_iterator';
                'stack', {'getfield(loop_variables, {1}, "mice_all", {',  'mouse_iterator', '}, "days", {', 'day_iterator', '}, ', 'loop_variables.conditions_stack_locations{', 'condition_iterator', '})'}, 'stack_iterator'; 
                };
-
+parameters.checkingDim = 2;
+parameters.check_againstDim = 3; 
+parameters.use_substructure = false;
 % Input values
 parameters.loop_list.things_to_check.dir = {[parameters.dir_exper 'behavior\eye\segmented eye pupil diameters\'], 'condition', '\', 'mouse', '\', 'day', '\'};
 parameters.loop_list.things_to_check.filename= {'segmented_timeseries_', 'stack', '.mat'};  
@@ -448,11 +449,42 @@ parameters.loop_list.check_against.variable = {'segmented_timeseries'};
 parameters.loop_list.mismatched_data.dir = {[parameters.dir_exper 'behavior\eye\']};
 parameters.loop_list.mismatched_data.filename= {'mismatched_data.mat'};
 
-CheckSizes(parameters);
+CheckSizes2(parameters);
 
 %% Notes for removal.
-% From first round:
-% % '1087'	'011222'	'motorized'	'11'	180
+% for these, it's okay to remove ending values to match fluorescence
+
+% load mismatched data 
+load('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\mismatched_data.mat')
+
+% For each item in mismatched data, 
+for itemi = 2:size(mismatched_data, 1)
+   
+    % load the pupil data
+    load(['Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\segmented eye pupil diameters\' mismatched_data{itemi, 3} '\' mismatched_data{itemi, 1} '\' mismatched_data{itemi, 2} '\segmented_timeseries_' mismatched_data{itemi, 4} '.mat'])
+    pupil = segmented_timeseries;
+    
+    % load the flourescence data 
+    load(['Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\fluorescence analysis\segmented timeseries\' mismatched_data{itemi, 3} '\' mismatched_data{itemi, 1} '\' mismatched_data{itemi, 2} '\segmented_timeseries_' mismatched_data{itemi, 4} '.mat'])
+    fluor = segmented_timeseries;
+
+    % find number of instances you should have
+    % if empty, make it set = 0 (because 3rd dim will be 1)
+    if  ~isempty(fluor{mismatched_data{itemi, 5}})
+        correct_num = size(fluor{mismatched_data{itemi, 5}}, 3);
+    else
+        correct_num = 0;
+    end
+    pupil_new = pupil;
+    pupil_new{mismatched_data{itemi, 5}} = pupil{mismatched_data{itemi, 5}}(:, 1:correct_num);
+
+    % Save over previous 
+    segmented_timeseries = pupil_new;
+    save(['Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\segmented eye pupil diameters\' mismatched_data{itemi, 3} '\' mismatched_data{itemi, 1} '\' mismatched_data{itemi, 2} '\segmented_timeseries_' mismatched_data{itemi, 4} '.mat'], 'segmented_timeseries')
+
+end 
+% %From first round: 
+% '1087'	'011222'	'motorized'	'11'	180
 % % --> get rid of the last instance, the fluoresence was short by ~20 frames
 % load('Y:\Sarah\Analysis\Experiments\Random Motorized Treadmill\behavior\eye\segmented eye pupil diameters\motorized\1087\011222\segmented_timeseries_11.mat')
 % segmented_timeseries{180} = segmented_timeseries{180}(:, 1:end-1);

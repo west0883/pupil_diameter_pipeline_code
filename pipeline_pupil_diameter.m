@@ -71,7 +71,7 @@ clear periods;
 
 % Create a shared motorized & spontaneous list.
 periods_bothConditions = [periods_motorized; periods_spontaneous]; 
-parameters.periods_bothConditions = periods_bothConditions;
+parameters.periods_bothConditions = periods_bothConditions.condition;
 parameters.periods_motorized = periods_motorized;
 parameters.periods_spontaneous = periods_spontaneous;
 
@@ -79,6 +79,7 @@ parameters.periods_spontaneous = periods_spontaneous;
 parameters.loop_variables.mice_all = parameters.mice_all;
 parameters.loop_variables.conditions = {'motorized'; 'spontaneous'};
 parameters.loop_variables.conditions_stack_locations = {'stacks'; 'spontaneous'};
+parameters.loop_variables.periods_bothConditions = parameters.periods_bothConditions;
 
 % If it exists, load mice_all_no_missing_data.m
 if isfile([parameters.dir_exper 'behavior\eye\mice_all_no_missing_data.mat'])
@@ -713,3 +714,33 @@ parameters.loop_list.things_to_save.fig.level = 'mouse';
 
 RunAnalysis({@HistogramOfRatios}, parameters);
 
+%% Pupil diameter for fluorescence PLSR
+% Instead of rolling the diameters, reshape so each time point is its own instance
+% (Is for fluorescence PLSR)
+
+% Put into same cell array, to match other formatting
+% Always clear loop list first. 
+if isfield(parameters, 'loop_list')
+parameters = rmfield(parameters,'loop_list');
+end
+
+% Iterators
+parameters.loop_list.iterators = {'mouse', {'loop_variables.mice_all(:).name'}, 'mouse_iterator'; 
+               'period', {'loop_variables.periods_bothConditions'}, 'period_iterator';            
+               };
+
+% one column, timepoints of each instance are together 
+parameters.evaluation_instructions = {{'data_evaluated = transpose(reshape(parameters.data, [], 1));'}};
+% Input 
+parameters.loop_list.things_to_load.data.dir = {[parameters.dir_exper 'behavior\eye\concatenated diameters\both conditions\'], 'mouse', '\'};
+parameters.loop_list.things_to_load.data.filename= {'concatenated_diameters_all_periods.mat'};
+parameters.loop_list.things_to_load.data.variable= {'diameters_all{', 'period_iterator', '}'}; 
+parameters.loop_list.things_to_load.data.level = 'mouse';
+
+% Output
+parameters.loop_list.things_to_save.data_evaluated.dir = {[parameters.dir_exper 'behavior\eye\diameter for fluorescence PLSR\'], 'mouse', '\'};
+parameters.loop_list.things_to_save.data_evaluated.filename= {'diameter_forFluorescence.mat'};
+parameters.loop_list.things_to_save.data_evaluated.variable= {'diameter_forFluorescence{', 'period_iterator', ', 1}'}; 
+parameters.loop_list.things_to_save.data_evaluated.level = 'mouse';
+
+RunAnalysis({@EvaluateOnData}, parameters);

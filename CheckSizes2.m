@@ -74,6 +74,10 @@ function [] = CheckSizes2(parameters)
             continue
         end
 
+        holder = strjoin(parameters.values(1:numel(parameters.values)/2), ', ');
+        if strcmp(holder, ['1087, 011222, 11'])
+            disp('here');
+        end 
         % If using a substructure, pull out the needed variable
         eval(['checking_variable = file_object_checking.' variable_string_checking ';']); 
         eval(['check_against_variable = file_object_check_against.' variable_string_check_against ';']); 
